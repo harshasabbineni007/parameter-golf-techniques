@@ -6,7 +6,8 @@ Curated references for each technique area, organized for progressive learning.
 
 ## Competition & Baseline
 
-- [Parameter Golf / modded-nanoGPT](https://github.com/KellerJordan/modded-nanogpt) — the competition repository, leaderboard, and all submission PRs
+- [OpenAI Parameter Golf](https://github.com/openai/parameter-golf) — the competition repository, merged records, and open submission PRs
+- [Parameter Golf leaderboard docs](https://openai-parameter-golf.mintlify.app/leaderboard) — overview page; useful, but it can lag the GitHub repo
 - [nanoGPT](https://github.com/karpathy/nanoGPT) — Karpathy's minimal GPT-2 implementation; the baseline most entries build on
 - [Muon optimizer blog post](https://kellerjordan.github.io/posts/muon/) — explains the optimizer used in most top entries
 

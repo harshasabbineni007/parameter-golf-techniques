@@ -6,17 +6,17 @@ Tokenization choices directly affect the embedding table size (a large fraction 
 
 ## Techniques
 
-### Small Fixed Vocabulary (e.g., 1024 tokens)
+### Vocabulary Size as a First-Class Tradeoff
 
-**What it is**: Replace the standard ~50,000-token vocabulary with a drastically smaller one (e.g., 1024 tokens using SentencePiece BPE or a custom scheme).
+**What it is**: Choose tokenizer size deliberately instead of defaulting to a standard 50k vocabulary. Early Parameter Golf records used very small vocabularies like 1024; later frontier entries often moved to `SP4096`, `SP8192`, and even `SP10240`.
 
 **Why it helps**: The embedding table costs `vocab_size × d_model` parameters. At d_model=512:
 - Standard vocab (50k): 50,000 × 512 = **25.6M parameters** (102 MB at float32)
 - Small vocab (1024): 1,024 × 512 = **0.5M parameters** (2 MB at float32)
 
-Savings: ~97% of embedding parameters freed for model depth/width.
+Smaller vocabularies save a huge number of embedding parameters, but they also make sequences longer. The frontier moved upward in vocab size once participants found they could afford larger tokenizers and still stay under 16 MB.
 
-**Trade-off**: Smaller vocab → longer token sequences for the same text → more tokens per forward pass, higher compute cost. The sweet spot depends on your compute budget vs. parameter budget.
+**Trade-off**: Smaller vocab means longer sequences and more training/eval compute. Larger vocab means more embedding bytes but fewer tokens per document. Parameter Golf's history is largely a story of finding better points on this curve.
 
 **How to build one**:
 ```python
@@ -37,21 +37,20 @@ spm.SentencePieceTrainer.train(
 
 **Why it helps**: Case-insensitive tokenization reduces effective vocabulary size (no need for separate tokens for "The", "the", "THE", etc.) while remaining fully lossless. The sidecar accounting ensures BPB measurement remains honest.
 
-**Key property**: BPB is computed over the original text, not the case-stripped version. The sidecar overhead is counted. This makes it a legitimate compression technique rather than cheating.
+**Key property**: BPB must still be computed over the original text, not the transformed stream. In practice, frontier CaseOps submissions export validation byte sidecars so the scorer uses original-byte counts instead of a guessed bytes-per-token ratio.
 
 ---
 
-### BigramHash / TrigramHash / Novel Tokenizers
+### BigramHash and Other Token-Side Context Tricks
 
-**What it is**: Augment or replace standard BPE tokenization with hash-based n-gram representations. Rather than a learned vocabulary, encode token context as a hash of the surrounding n-gram.
+**What it is**: Add a lightweight hashed context feature to tokens, usually with a separate embedding lookup keyed by a bigram or trigram hash.
 
 **Variants**:
 - **BigramHash**: encode each position as a hash of the current + previous token
 - **TrigramHash**: three-token context window
-- **H-net**: a custom hierarchical tokenizer
 - **SP8192 / SP4096**: SentencePiece models at 8192 or 4096 vocab size
 
-**Why it helps**: N-gram hashes add contextual information to each token's embedding at essentially zero parameter cost (just a hash table lookup or simple arithmetic). The model can distinguish "bank" as the first word vs. "bank" after "river" without enlarging the vocabulary.
+**Why it helps**: Hash features add local context without needing a much larger vocabulary. Several strong submissions used BigramHash-style features as part of a broader stack, though it is not the main late-April frontier direction.
 
 **Implementation sketch**:
 ```python
@@ -63,23 +62,16 @@ def bigram_hash_embed(token_ids, vocab_size):
 
 ---
 
-### Sliding Window / Long Context Attention (VarLenAttn)
+### Byte Accounting and Validation Correctness
 
-**What it is**: During evaluation (and optionally training), process sequences with overlapping windows so each token benefits from a longer effective context.
+**What it is**: If you change the tokenizer or text transform, you also need to change how BPB is computed so it still reflects original UTF-8 bytes.
 
-**Variants**:
-- **Sliding window eval with stride S**: compute loss only on tokens not in the overlap region, but attend to a full window of prior tokens
-- **VarLenAttn**: variable-length attention kernels (e.g., from FlashAttention) that handle variable-length packed sequences efficiently
+**Why it helps**: Correct accounting does not improve model quality, but it is required for a submission to be valid. Issue `#1017` in the main repo is the best reference for this.
 
-**Why it helps**: Language models benefit strongly from longer context — a model trained on 512-token windows can score better on test data if evaluated with 1024-token windows at stride 64. The model sees more context per token during scoring.
-
-**Sliding window eval (stride 64)**:
-```
-Window 1: tokens [0,   512]  → score tokens [0,   64]
-Window 2: tokens [64,  576]  → score tokens [64,  128]
-...
-```
-Each scored token has seen up to 448 tokens of prior context rather than just what fits in a single pass.
+**Common requirements**:
+- Count bytes from the original text, not the transformed token stream
+- Handle SentencePiece special tokens correctly
+- If you use a reversible transform like CaseOps, carry the byte sidecar through evaluation
 
 ---
 
@@ -103,8 +95,8 @@ Each scored token has seen up to 448 tokens of prior context rather than just wh
 
 | Technique | Parameter Savings | Quality Impact | Complexity |
 |-----------|------------------|----------------|------------|
-| Vocab 1024 | Very High | Moderate (longer seqs) | Low |
+| Small vocab | Very High | Mixed: helps size, hurts sequence length | Low |
+| SP8192/SP10240 | Moderate | Often strong frontier tradeoff | Low |
 | CaseOps | Medium | Neutral (lossless) | Medium |
 | BigramHash | Zero (compute only) | Small positive | Low |
-| Sliding window eval | Zero | Medium positive | Low |
 | Coprime loaders | Zero | Small positive | Low |

@@ -57,14 +57,7 @@ out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
 model = torch.compile(model, mode='max-autotune')
 ```
 
-**Compilation modes**:
-| Mode | Compilation time | Runtime speedup |
-|------|-----------------|-----------------|
-| `default` | ~30s | 1.5–2× |
-| `reduce-overhead` | ~60s | 2–3× |
-| `max-autotune` | ~5min | 3–5× (best) |
-
-**Why it matters for 10-min training**: With `max-autotune`, you can often get 30–50% more training steps in the same wall time — directly translating to better model quality.
+**Why it matters for 10-min training**: it can substantially reduce per-step overhead, but compile time itself is part of the real wall-clock story. In Parameter Golf, `torch.compile` is most useful when the compile cost is cached, amortized, or outweighed by a big step-time win.
 
 **Key fusions**:
 - Attention + softmax → single kernel (if not using FlashAttention)
@@ -96,19 +89,19 @@ def fused_rms_norm_linear_kernel(x_ptr, w_ptr, out_ptr, ...):
 
 ---
 
-### Per-group lrzip
+### Artifact Packaging: brotli, lzma, lrzip
 
-**What it is**: Apply the `lrzip` compression tool separately to each group of weights (e.g., each 128-weight group from per-group quantization) rather than to the entire checkpoint at once.
+**What it is**: Treat serialization and compression as part of the model design. Late frontier submissions often combine brotli-compressed weights, LZMA-wrapped code, and sometimes per-group `lrzip` or row-reordering tricks.
 
 **Why it helps**:
-- Each group has its own quantization scale → its weight values span a smaller numerical range
-- Compressing each group independently exploits intra-group structure that cross-group compression obscures
-- Can be combined with different compressors per layer (attention vs. MLP may compress differently)
+- Similar tensors compress better when packed together
+- Quantized tensors often become much more compressible after row reordering or per-group serialization
+- Code compression matters too, because the 16 MB cap counts `train_gpt.py` bytes as well as model bytes
 
 **Practical notes**:
-- `lrzip` uses LZMA + RZIP (a large-window entropy coder) for high ratios
-- Overhead: the per-group metadata (scales, zero-points) needs to be stored efficiently
-- Typical workflow: serialize each group → lrzip each → concatenate with offset table
+- `brotli` is common and easy to use
+- `lzma` is common for self-extracting code wrappers
+- `lrzip` can win on some stacks, but it adds tooling and serialization complexity
 
 ---
 

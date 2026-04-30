@@ -78,7 +78,7 @@ Apply TTT before the final quantization step. The model adapts in full precision
 - Use a trie or hash map keyed on the n-gram context
 - Tune the blend weight `α` — typically 0.1–0.3
 
-**Compliance note**: N-gram caching sparked significant debate in the Parameter Golf community. It is legal if and only if the cache is built from previously scored tokens and never from future tokens. Many early implementations had subtle lookahead bugs.
+**Compliance note**: N-gram caching was important in some earlier phases of the challenge, but it has also been one of the most contentious areas. It is legal only if the cache is built from previously scored tokens and never from future tokens. Many implementations were rejected or heavily scrutinized for subtle lookahead bugs.
 
 ---
 
@@ -138,7 +138,8 @@ Violations cause disqualification. When in doubt, use Score-First TTT — it's t
 | Technique | Typical BPB Improvement | Notes |
 |-----------|------------------------|-------|
 | Sliding window eval (stride 64) | ~0.002–0.005 | Free compute |
-| N-gram caching (7-gram backoff) | ~0.005–0.015 | Depends on text repetition |
+| N-gram caching (7-gram backoff) | Highly variable | Historically useful, but rule-sensitive |
 | Score-First TTT (5–10 steps) | ~0.010–0.030 | Depends on domain shift |
-| Entropy-adaptive TTT | ~0.005 addl. | On top of base TTT |
-| LoRA-TTT | ~0.010–0.025 | Less forgetting than full TTT |
+| Entropy-adaptive TTT | Small addl. | On top of base TTT |
+| LoRA-TTT | ~0.010–0.025 | Cheaper than full-model adaptation |
+| Pre-quant TTT | Potentially very large | Major open frontier, but under active rules debate |

@@ -52,39 +52,40 @@ class LoopedTransformer(nn.Module):
 
 ---
 
-### Gated Attention / QuantGate / SparseAttnGate
+### Gated Attention / SparseAttnGate / Output Gates
 
-**What it is**: Add a learnable scalar (or low-rank) gate to attention outputs, allowing the model to suppress or amplify individual attention heads or layers.
+**What it is**: Add a small learnable gate to attention outputs, residual branches, or selected heads so the model can suppress or amplify specific pathways.
 
-**Variants**:
-- **QuantGate**: gate is quantized (e.g., to a few bits), saving storage
-- **SparseAttnGate**: gate values pushed toward 0 or 1 via regularization, effectively pruning attention heads dynamically
+**Variants seen in Parameter Golf**:
+- **SparseAttnGate**: a narrow learned gate on head outputs
+- **Attention output gates**: tiny per-head or per-window modulation layers
+- **Residual/skip gates**: gates on long skip paths or parallel residual branches
 
-**Why it helps**: In tiny models, not all attention heads are equally useful. Gates let the model learn which heads to rely on, focusing capacity where it matters.
+**Why it helps**: In tiny models, not all heads or branches are equally useful. Gates let the model focus scarce capacity where it matters most while spending very few extra bytes.
 
 ---
 
-### XSA-all (Cross / Sparse Attention, All Layers)
+### XSA / XSA-all
 
-**What it is**: A sparse or cross-layer attention variant applied at every layer rather than only at certain depths.
+**What it is**: A family of attention modifications used in many mid- and late-stage submissions. In the repo, you'll often see variants described as `XSA` or `XSA-all`, meaning the mechanism is applied to some or all layers.
 
-**Why it helps**: Standard full attention scales as O(n²) in sequence length. Sparse patterns (e.g., local + strided + global) reduce this while preserving long-range information flow.
+**Why it helps**: The exact implementation varies by PR, but the recurring theme is better attention efficiency or better parameter use under a fixed artifact budget. Treat `XSA` as a repo-specific technique family rather than a single standard architecture term.
 
 ---
 
 ### SmearGate + BOS-Fixed
 
-**What it is**: SmearGate is a gating mechanism applied to attention logits or values. BOS-Fixed patches a known instability at the beginning-of-sequence position.
+**What it is**: SmearGate mixes a small amount of the previous token's hidden state into the current token through a learned gate. Later submissions discovered that this can leak information across packed-document boundaries unless BOS positions are masked correctly.
 
-**Why it helps**: BOS tokens often receive disproportionately large attention weights, destabilizing training. The "BOS-Fixed" patch caps or normalizes BOS attention, while SmearGate provides finer control over information spread.
+**Why it helps**: The mechanism can improve local information flow with very little parameter cost. The BOS fix matters because packed validation streams otherwise let the last token of one document influence the BOS token of the next, which is both a correctness and compliance issue.
 
 ---
 
-### Value Residual Learning (VRL)
+### Value Residual Learning (VRL) and Other Residual Tweaks
 
-**What it is**: Add a residual connection directly on the value projections in attention — the value vector is the sum of the projected value and a residual from an earlier representation.
+**What it is**: A grab-bag of lightweight residual modifications inside the attention stack, such as value residuals or alternative skip paths.
 
-**Why it helps**: Improves gradient flow and preserves low-level features through many layers, similar in spirit to ResNets but applied inside the attention mechanism.
+**Why it helps**: These tweaks can improve gradient flow in deep or recurrent models, but they are less universal than recurrence, parallel residuals, or gating. Treat them as secondary ideas rather than the core frontier recipe.
 
 ---
 
@@ -115,13 +116,13 @@ class LoopedTransformer(nn.Module):
 
 ---
 
-### RMSNormNoWeight
+### RMSNormNoWeight and Other Byte-Saving Normalization Tweaks
 
 **What it is**: Use RMSNorm but remove the learnable scale parameter (`gamma`), reducing it to a pure normalization operation.
 
 **Why it helps**: Each learnable scale in a standard RMSNorm costs `d_model` parameters (stored at float32 or bfloat16). Removing them saves a small but non-trivial number of bytes across all layers.
 
-**Trade-off**: The model loses the ability to rescale each dimension post-normalization. Works well when combined with careful initialization or other normalization strategies.
+**Trade-off**: The model loses the ability to rescale each dimension post-normalization. This has shown up in some compact-model experiments, but it is not a defining ingredient of the current top Parameter Golf stacks.
 
 ---
 
