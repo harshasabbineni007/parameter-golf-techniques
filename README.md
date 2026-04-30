@@ -20,17 +20,32 @@ One wrinkle: the Mintlify docs leaderboard has lagged behind the GitHub repo at 
 
 ---
 
-## Technique Categories
+## Contents
 
-| # | Category | Key Ideas |
-|---|----------|-----------|
-| [1](techniques/01-quantization.md) | **Quantization & Compression** | GPTQ, QAT, asymmetric correction, brotli/lrzip/lzma |
-| [2](techniques/02-architecture.md) | **Architectural Modifications** | Depth recurrence, parallel residuals, sparse gating |
-| [3](techniques/03-tokenization.md) | **Tokenization & Data** | SP8192/SP10240, CaseOps, BigramHash |
-| [4](techniques/04-optimization.md) | **Optimization & Training** | Muon optimizer, EMA, hyperparameter stacking |
-| [5](techniques/05-test-time.md) | **Test-Time Techniques** | score-first TTT, phased TTT, pre-quant TTT |
-| [6](techniques/06-systems.md) | **Systems & Efficiency** | FlashAttention-3, torch.compile, lrzip |
-| [7](techniques/07-stacking.md) | **How Techniques Compound** | Stacking strategies from merged and pending frontier entries |
+```
+parameter-golf-techniques/
+│
+├── techniques/
+│   ├── 01-quantization.md       ← QAT, GPTQ, per-group compression, brotli/lrzip/lzma
+│   ├── 02-architecture.md       ← Depth recurrence, parallel residuals, sparse gating
+│   ├── 03-tokenization.md       ← SP8192/SP10240, CaseOps, BigramHash, byte accounting
+│   ├── 04-optimization.md       ← Muon optimizer, EMA, SWA, hyperparameter stacking
+│   ├── 05-test-time.md          ← Score-first TTT, phased TTT, pre-quant TTT, n-gram caching
+│   ├── 06-systems.md            ← FlashAttention-3, torch.compile, megakernels, artifact packaging
+│   └── 07-stacking.md          ← How techniques compound; full merged frontier stack
+│
+└── resources.md                 ← Papers, repos, and further reading by category
+```
+
+### Technique Files
+
+- [**01 · Quantization & Compression**](techniques/01-quantization.md) — QAT, GPTQ-lite, per-group asymmetric quantization, artifact compression (brotli, lrzip, lzma)
+- [**02 · Architectural Modifications**](techniques/02-architecture.md) — Depth recurrence, U-Net skips, sparse attention gates, SmearGate, partial RoPE, custom activations
+- [**03 · Tokenization & Data**](techniques/03-tokenization.md) — Vocabulary size tradeoffs (SP1024→SP10240), CaseOps, BigramHash, byte-accurate BPB accounting
+- [**04 · Optimization & Training**](techniques/04-optimization.md) — Muon optimizer, EMA, SWA, FusedCE, hyperparameter stacking, ortho init
+- [**05 · Test-Time Techniques**](techniques/05-test-time.md) — Score-first TTT, LoRA-TTT, pre-quant TTT, n-gram backoff mixer, sliding window eval
+- [**06 · Systems & Efficiency**](techniques/06-systems.md) — FlashAttention-3, torch.compile, Triton megakernels, bfloat16, artifact packaging
+- [**07 · How Techniques Compound**](techniques/07-stacking.md) — Stacking order, interaction matrix, full PR #1855 stack, open frontier themes
 
 ---
 
